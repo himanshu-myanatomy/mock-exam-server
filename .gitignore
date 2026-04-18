@@ -1,0 +1,48 @@
+# Dependencies (always ignore — reinstall with npm install)
+node_modules/
+**/node_modules/
+
+/node_modules
+# Build
+dist/
+dist-ssr/
+*.local
+
+# Environment — copy from .env.example; never commit secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Vercel
+.vercel
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Certs / keys (accidental)
+*.pem
+*.key
+
+# Misc
+*.tsbuildinfo
+.cache/
+.turbo/

@@ -1,0 +1,24 @@
+{
+  "name": "mock-exam-platform",
+  "version": "1.0.0",
+  "description": "Mock exam platform frontend for SEB flow testing",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:all": "concurrently \"npm run client\" \"npm run seb-server\"",
+    "client": "vite",
+    "seb-server": "npm start --prefix ../../seb-server",
+    "build": "vite build",
+    "preview": "vite preview",
+    "verify:flow": "node scripts/verify-seb-flow.mjs"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "vite": "^5.0.10"
+  }
+}
