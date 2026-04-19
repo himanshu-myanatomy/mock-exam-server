@@ -19,8 +19,6 @@ const DEFAULT_CLIENT_ASSESSMENT_ID =
 /** Must match the assessment title stored in seb-server for this org */
 const DEFAULT_ASSESSMENT_NAME =
   import.meta.env.VITE_ASSESSMENT_NAME || import.meta.env.VITE_EXAM_NAME || 'Direct Exam';
-/** Optional — sent as subscriptionPlan on register-launch (LMS billing / product tier). */
-const DEFAULT_SUBSCRIPTION_PLAN = import.meta.env.VITE_SUBSCRIPTION_PLAN || '';
 const DEFAULT_SECURITY_TEMPLATE =
   String(import.meta.env.VITE_SECURITY_TEMPLATE || 'standard').toLowerCase() === 'strict' ? 'strict' : 'standard';
 /** Wire enum for register-launch: `TEST` → exam session, `INTERVIEW` → interview session (seb-server maps to exam|interview). */
@@ -53,7 +51,7 @@ function AppShell({ pageTitle, pageDesc, children }) {
       </header>
       <main className="app-main">{children}</main>
       <footer className="app-footer">
-        Mock LMS — local integration test for MA Proctoring and seb-server.
+        Mock LMS — local integration test for MA-Proctoring and backend service.
       </footer>
     </div>
   );
@@ -271,7 +269,7 @@ function MobileProctorStandalone({ launchTicketId }) {
       }
       setStatus('Recording stopped.');
       setHeartbeatWarning(
-        'Warning: If exam is still running in MA Proctoring and recording stays off for 30 seconds, the candidate will be flagged as suspected.'
+        'Warning: If exam is still running in MA-Proctoring and recording stays off for 30 seconds, the candidate will be flagged as suspected.'
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to stop recording');
@@ -338,7 +336,6 @@ function LmsStartPage() {
   const [launchUrl, setLaunchUrl] = useState(DEFAULT_LAUNCH_URL);
   const [clientAssessmentId, setClientAssessmentId] = useState(DEFAULT_CLIENT_ASSESSMENT_ID);
   const [assessmentName, setAssessmentName] = useState(DEFAULT_ASSESSMENT_NAME);
-  const [subscriptionPlan, setSubscriptionPlan] = useState(DEFAULT_SUBSCRIPTION_PLAN);
   const [securityTemplate, setSecurityTemplate] = useState(DEFAULT_SECURITY_TEMPLATE);
   /** `TEST` | `INTERVIEW` — sent as register-launch `assessmentType` (seb-server normalizes to exam|interview). */
   const [assessmentKind, setAssessmentKind] = useState(DEFAULT_ASSESSMENT_KIND);
@@ -385,7 +382,7 @@ function LmsStartPage() {
   async function startExam(e) {
     e?.preventDefault();
     if (!accessToken?.trim()) {
-      setExamStatus('Please enter the access token (org token for seb-server).');
+      setExamStatus('Please enter the access token (org token for backend service).');
       return;
     }
     if (!candidateEmail?.trim()) {
@@ -401,7 +398,7 @@ function LmsStartPage() {
       return;
     }
     if (!assessmentName?.trim()) {
-      setExamStatus('Please enter the assessment display name — must match the title configured in seb-server for this org.');
+      setExamStatus('Please enter the assessment display name — must match the title configured in backend service for this org.');
       return;
     }
     if (!consentGiven) {
@@ -409,7 +406,7 @@ function LmsStartPage() {
       return;
     }
     setIsStartingSeb(true);
-    setExamStatus('Downloading and opening MA Proctoring...');
+    setExamStatus('Downloading and opening MA-Proctoring...');
     setFallbackDownload(null);
     const effectiveAccessToken = accessToken.trim();
     const sebBaseUrl = SEB_SERVER_URL.replace(/\/$/, '');
@@ -423,9 +420,6 @@ function LmsStartPage() {
       assessmentName: assessmentName.trim(),
       assessmentType: assessmentKind,
       securityTemplate,
-      ...(subscriptionPlan.trim()
-        ? { subscriptionPlan: subscriptionPlan.trim() }
-        : {}),
     };
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
@@ -442,7 +436,7 @@ function LmsStartPage() {
       try {
         registerData = registerText ? JSON.parse(registerText) : {};
       } catch {
-        registerData = { error: registerText || 'Unknown response from seb-server' };
+        registerData = { error: registerText || 'Unknown response from backend service' };
       }
       if (!registerRes.ok) {
         const hint = registerData.hint || '';
@@ -459,7 +453,7 @@ function LmsStartPage() {
               }
             : {
                 message:
-                  'Register-launch failed. Fix the error above, or set VITE_SEB_CLIENT_NAME and VITE_SEB_CLIENT_SECRET in .env for a manual .seb download (matches seb-server org SEB OAuth credentials).',
+                  'Register-launch failed. Fix the error above, or set client credentials in .env for a manual configuration download.',
               }
         );
         return;
@@ -479,7 +473,7 @@ function LmsStartPage() {
       }
       if (!orgConfigFetchUrl) {
         setExamStatus(
-          'Launch registered but seb-server did not return orgConfigUrl or launchTicketId — cannot download .seb. Update seb-server.'
+          'Launch registered but the backend did not return orgConfigUrl or launchTicketId — cannot download the configuration file. Update backend.'
         );
         setFallbackDownload(
           VITE_SEB_CLIENT_NAME && VITE_SEB_CLIENT_SECRET
@@ -489,7 +483,7 @@ function LmsStartPage() {
               }
             : {
                 message:
-                  'Set VITE_SEB_CLIENT_NAME and VITE_SEB_CLIENT_SECRET for manual download, or upgrade seb-server register-launch to return orgConfigUrl.',
+                  'Set client credentials for manual download, or update backend register-launch to return orgConfigUrl.',
               }
         );
         setIsStartingSeb(false);
@@ -499,17 +493,17 @@ function LmsStartPage() {
       await downloadSebFile(orgConfigFetchUrl, controller.signal, undefined, effectiveAccessToken);
       if (proctorRequired) {
         setExamStatus(
-          'Launch registered and .seb downloaded. Open the file in MA Proctoring — strict proctoring continues inside MA Proctoring (mobile / QR when the exam session starts). Candidate will be flagged if mobile proctoring stays offline for 30 seconds.'
+          'Launch registered and .seb downloaded. Open the file in MA-Proctoring — strict proctoring continues inside MA-Proctoring (mobile / QR when the exam session starts). Candidate will be flagged if mobile proctoring stays offline for 30 seconds.'
         );
       } else {
-        setExamStatus('Launch registered on seb-server and .seb downloaded. Open the downloaded file in MA Proctoring.');
+        setExamStatus('Launch registered on backend service and configuration file downloaded. Open the downloaded file in MA-Proctoring.');
       }
     } catch (e) {
       const aborted = e?.name === 'AbortError';
       setExamStatus(
         aborted
-          ? 'Request timed out or was cancelled. Is seb-server running on port 4000?'
-          : 'Error: ' + e.message + ' — Ensure seb-server is reachable on port 4000. Or download manually:'
+          ? 'Request timed out or was cancelled. Is backend service running on port 4000?'
+          : 'Error: ' + e.message + ' — Ensure backend service is reachable on port 4000. Or download manually:'
       );
       if (orgConfigFetchUrl) {
         setFallbackDownload({ url: orgConfigFetchUrl });
@@ -521,7 +515,7 @@ function LmsStartPage() {
       } else {
         setFallbackDownload({
           message:
-            'Set VITE_SEB_CLIENT_NAME and VITE_SEB_CLIENT_SECRET for manual .seb download, or retry after fixing connectivity.',
+            'Set client credentials for manual configuration download, or retry after fixing connectivity.',
         });
       }
     } finally {
@@ -540,7 +534,7 @@ function LmsStartPage() {
       const detail = await configRes.text();
       throw new Error(
         `Launch registered, but failed to download .seb (${configRes.status}). ${
-          detail || 'Check seb-server logs.'
+          detail || 'Check backend service logs.'
         }`
       );
     }
@@ -566,7 +560,7 @@ function LmsStartPage() {
     return (
       <AppShell
         pageTitle="Exam session"
-        pageDesc="Validated after launch in MA Proctoring."
+        pageDesc="Validated after launch in MA-Proctoring."
       >
         <div className="exam-page">
           <div className="exam-card">
@@ -578,7 +572,7 @@ function LmsStartPage() {
             )}
             {status === 'invalid' && (
               <p className="text-error">
-                Validation failed (403). Open from MA Proctoring or use the Start test flow.
+                Validation failed (403). Open from MA-Proctoring or use the Start test flow.
               </p>
             )}
             {status === 'error' && <p className="text-error">Validation error.</p>}
@@ -591,8 +585,8 @@ function LmsStartPage() {
 
   return (
     <AppShell
-      pageTitle="Start exam in MA Proctoring"
-      pageDesc="Register a launch on seb-server, download the .seb config, and open the exam in MA Proctoring instead of a regular browser."
+      pageTitle="Start exam in MA-Proctoring"
+      pageDesc="Register a launch on backend service, download the configuration file, and open the exam in MA-Proctoring instead of a regular browser."
     >
       <div className="card">
         <h2 className="card-title">Sign in</h2>
@@ -637,12 +631,7 @@ function LmsStartPage() {
 
       <div className="card">
         <h2 className="card-title">Start test</h2>
-        <p className="card-lead">
-          Calls <strong>{SEB_SERVER_URL}</strong> for <code>register-launch</code>, then downloads the bootstrap using{' '}
-          <code>orgConfigUrl</code> (includes <code>launchTicketId</code> for <code>GET /api/org-config/:accessToken</code> when{' '}
-          <code>ORG_CONFIG_REQUIRE_CLIENT_PROOF</code> is on). Enter the org <strong>access token</strong> below — that value is sent as{' '}
-          <code>accessToken</code> on register-launch and used for org-config URLs.
-        </p>
+        <p className="card-lead">Connects to <strong>{SEB_SERVER_URL}</strong> and starts MA-Proctoring for this attempt.</p>
         <form onSubmit={startExam}>
           <div className="form-group">
             <label className="form-label" htmlFor="lms-access-token">
@@ -658,10 +647,6 @@ function LmsStartPage() {
               value={accessToken}
               onChange={(e) => setAccessToken(e.target.value)}
             />
-            <span className="form-hint">
-              Sent as <code>accessToken</code> on <code>POST /api/v1/register-launch</code> and in <code>GET /api/v1/org-config/…</code>. Default from env:{' '}
-              <code>VITE_ACCESS_TOKEN</code>, <code>VITE_ORG_ACCESS_TOKEN</code>, or <code>VITE_ORG_SLUG</code>.
-            </span>
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="lms-email">
@@ -690,10 +675,6 @@ function LmsStartPage() {
               value={launchUrl}
               onChange={(e) => setLaunchUrl(e.target.value)}
             />
-            <span className="form-hint">
-              Sent as <code>launchUrl</code> on <code>POST /api/register-launch</code> (legacy <code>examUrl</code> still accepted by seb-server). Defaults:{' '}
-              <code>VITE_LAUNCH_URL</code> or <code>VITE_EXAM_URL</code>.
-            </span>
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="lms-client-assessment-id">
@@ -707,10 +688,6 @@ function LmsStartPage() {
               value={clientAssessmentId}
               onChange={(e) => setClientAssessmentId(e.target.value)}
             />
-            <span className="form-hint">
-              Sent as <code>clientAssessmentId</code>. Matched to <code>Exam.clientAssessmentId</code> on seb-server. Defaults:{' '}
-              <code>VITE_CLIENT_ASSESSMENT_ID</code> or <code>VITE_EXAM_ID</code> (demo: <code>none-direct-exam</code>).
-            </span>
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="lms-assessment-name">
@@ -720,13 +697,10 @@ function LmsStartPage() {
               id="lms-assessment-name"
               className="input"
               type="text"
-              placeholder="Must match title in seb-server"
+              placeholder="Must match title in backend service"
               value={assessmentName}
               onChange={(e) => setAssessmentName(e.target.value)}
             />
-            <span className="form-hint">
-              Sent as <code>assessmentName</code>. Defaults: <code>VITE_ASSESSMENT_NAME</code> or <code>VITE_EXAM_NAME</code>.
-            </span>
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="lms-assessment-type">
@@ -741,27 +715,6 @@ function LmsStartPage() {
               <option value="TEST">Test (proctored written / timed assessment)</option>
               <option value="INTERVIEW">Interview (live or structured interview flow)</option>
             </select>
-            <span className="form-hint">
-              Sent as <code>assessmentType</code> on <code>POST /api/register-launch</code> (<code>TEST</code> or <code>INTERVIEW</code>).
-              seb-server stores <code>exam</code> or <code>interview</code>. Default: <code>VITE_ASSESSMENT_TYPE</code> or <code>TEST</code>.
-            </span>
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="lms-subscription-plan">
-              Subscription plan (optional)
-            </label>
-            <input
-              id="lms-subscription-plan"
-              className="input"
-              type="text"
-              placeholder="e.g. pro, basic, enterprise"
-              value={subscriptionPlan}
-              onChange={(e) => setSubscriptionPlan(e.target.value)}
-            />
-            <span className="form-hint">
-              Sent as <code>subscriptionPlan</code> on <code>POST /api/register-launch</code> and stored on the candidate. Default:{' '}
-              <code>VITE_SUBSCRIPTION_PLAN</code>.
-            </span>
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="lms-security-template">
@@ -773,18 +726,13 @@ function LmsStartPage() {
               value={securityTemplate}
               onChange={(e) => setSecurityTemplate(e.target.value)}
             >
-              <option value="standard">Standard (desktop MA Proctoring monitoring)</option>
+              <option value="standard">Standard (desktop MA-Proctoring monitoring)</option>
               <option value="strict">Strict (includes required mobile / secondary camera proctoring)</option>
             </select>
-            <span className="form-hint">
-              Sent as <code>securityTemplate</code> on <code>POST /api/register-launch</code>. seb-server resolves mobile proctoring from this and the
-              provisioned exam — not from a separate client flag. Default: <code>VITE_SECURITY_TEMPLATE</code> or <code>standard</code>.
-            </span>
           </div>
           {securityTemplate === 'strict' ? (
             <p className="form-hint" style={{ marginTop: 0 }}>
-              Strict plan includes mobile (secondary camera) proctoring; after the candidate opens the .seb in MA Proctoring, the exam flow will surface mobile /
-              QR steps there — not on this LMS page.
+              Strict includes mobile (secondary camera) proctoring; follow the steps in MA-Proctoring after opening the .seb.
             </p>
           ) : null}
           <label className="checkbox-row">
@@ -800,10 +748,6 @@ function LmsStartPage() {
           <button type="submit" className="btn btn-primary btn-block" disabled={isStartingSeb}>
             {isStartingSeb ? 'Starting…' : 'Start test'}
           </button>
-          <div className="tech-strip">
-            Flow: <code>POST /api/register-launch</code> → use returned <code>orgConfigUrl</code> (or <code>launchTicketId</code> query) for{' '}
-            <code>GET /api/org-config/{accessToken.trim() || '…'}</code> so the ticket proves access without embedding OAuth secrets in the browser.
-          </div>
         </form>
         <div
           role="status"
@@ -849,7 +793,7 @@ function App() {
     return (
       <AppShell
         pageTitle="Mobile proctor check-in"
-        pageDesc="Use your phone camera while the exam runs in MA Proctoring on the laptop."
+        pageDesc="Use your phone camera while the exam runs in MA-Proctoring on the laptop."
       >
         <MobileProctorStandalone launchTicketId={mobileLaunchTicketId} />
       </AppShell>
