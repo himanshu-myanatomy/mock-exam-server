@@ -8,11 +8,6 @@ dist/
 dist-ssr/
 *.local
 
-# Environment — copy from .env.example; never commit secrets
-.env
-.env.*
-!.env.example
-
 # Logs
 logs/
 *.log
