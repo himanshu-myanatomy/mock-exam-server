@@ -8,8 +8,6 @@ const DEFAULT_ACCESS_TOKEN =
   import.meta.env.VITE_ORG_SLUG ||
   'none';
 /** Optional — only for manual .mapr download when register-launch fails (GET /api/org-config with ORG_CONFIG_REQUIRE_CLIENT_PROOF). */
-const VITE_SEB_CLIENT_NAME = import.meta.env.VITE_SEB_CLIENT_NAME || '';
-const VITE_SEB_CLIENT_SECRET = import.meta.env.VITE_SEB_CLIENT_SECRET || '';
 /** Candidate/session-specific launch URL — same contract as real LMS (deep link, signed URL, etc.) */
 const DEFAULT_LAUNCH_URL =
   import.meta.env.VITE_LAUNCH_URL || import.meta.env.VITE_EXAM_URL || '';
@@ -445,17 +443,7 @@ function LmsStartPage() {
           (hint ? ' ' + hint : '') +
           ' — Or download manually: '
         );
-        setFallbackDownload(
-          VITE_SEB_CLIENT_NAME && VITE_SEB_CLIENT_SECRET
-            ? {
-                url: bareOrgConfigUrl,
-                auth: { clientName: VITE_SEB_CLIENT_NAME, clientSecret: VITE_SEB_CLIENT_SECRET },
-              }
-            : {
-                message:
-                  'Register-launch failed. Fix the error above, or set client credentials in .env for a manual configuration download.',
-              }
-        );
+        setFallbackDownload({ url: bareOrgConfigUrl });
         return;
       }
 
@@ -475,22 +463,12 @@ function LmsStartPage() {
         setExamStatus(
           'Launch registered but the backend did not return orgConfigUrl or launchTicketId — cannot download the configuration file. Update backend.'
         );
-        setFallbackDownload(
-          VITE_SEB_CLIENT_NAME && VITE_SEB_CLIENT_SECRET
-            ? {
-                url: bareOrgConfigUrl,
-                auth: { clientName: VITE_SEB_CLIENT_NAME, clientSecret: VITE_SEB_CLIENT_SECRET },
-              }
-            : {
-                message:
-                  'Set client credentials for manual download, or update backend register-launch to return orgConfigUrl.',
-              }
-        );
+        setFallbackDownload({ url: bareOrgConfigUrl });
         setIsStartingSeb(false);
         return;
       }
 
-      await downloadSebFile(orgConfigFetchUrl, controller.signal, undefined, effectiveAccessToken);
+      triggerBackendDownload(orgConfigFetchUrl);
       if (proctorRequired) {
         setExamStatus(
           'Launch registered and .mapr downloaded. Open the file in MA-Proctoring — strict proctoring continues inside MA-Proctoring (mobile / QR when the exam session starts). Candidate will be flagged if mobile proctoring stays offline for 30 seconds.'
@@ -507,16 +485,8 @@ function LmsStartPage() {
       );
       if (orgConfigFetchUrl) {
         setFallbackDownload({ url: orgConfigFetchUrl });
-      } else if (VITE_SEB_CLIENT_NAME && VITE_SEB_CLIENT_SECRET) {
-        setFallbackDownload({
-          url: bareOrgConfigUrl,
-          auth: { clientName: VITE_SEB_CLIENT_NAME, clientSecret: VITE_SEB_CLIENT_SECRET },
-        });
       } else {
-        setFallbackDownload({
-          message:
-            'Set client credentials for manual configuration download, or retry after fixing connectivity.',
-        });
+        setFallbackDownload({ url: bareOrgConfigUrl });
       }
     } finally {
       clearTimeout(timeoutId);
@@ -524,38 +494,13 @@ function LmsStartPage() {
     }
   }
 
-  async function downloadSebFile(downloadUrl, signal, auth, fileLabel) {
-    const headers = {};
-    if (auth?.clientName && auth?.clientSecret) {
-      headers.Authorization = `Basic ${btoa(`${auth.clientName}:${auth.clientSecret}`)}`;
-    }
-    const configRes = await fetch(downloadUrl, { signal, headers });
-    if (!configRes.ok) {
-      const detail = await configRes.text();
-      throw new Error(
-        `Launch registered, but failed to download .mapr (${configRes.status}). ${
-          detail || 'Check backend service logs.'
-        }`
-      );
-    }
-
-    const blob = await configRes.blob();
-    const fileUrl = window.URL.createObjectURL(blob);
+  function triggerBackendDownload(downloadUrl) {
     const anchor = document.createElement('a');
-    anchor.href = fileUrl;
-    const header = configRes.headers.get('content-disposition') || '';
-    const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
-    const basicMatch = header.match(/filename="([^"]+)"|filename=([^;]+)/i);
-    const fallbackStem = String(fileLabel || 'config').replace(/[/\\?%*:|"<>]/g, '-');
-    const fallbackTimestamp = new Date().toISOString().replace(/:/g, '').replace(/Z$/, '');
-    const filenameFromHeader = utf8Match?.[1]
-      ? decodeURIComponent(utf8Match[1])
-      : basicMatch?.[1] || basicMatch?.[2] || '';
-    anchor.download = filenameFromHeader || `${fallbackStem}-exam-${fallbackTimestamp}.mapr`;
+    anchor.href = downloadUrl;
+    anchor.rel = 'noopener';
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    window.URL.revokeObjectURL(fileUrl);
   }
 
   // Exam page view (when /exam?token=...)
@@ -767,16 +712,7 @@ function LmsStartPage() {
           <button
             type="button"
             className="link-download"
-            onClick={() =>
-              void downloadSebFile(
-                fallbackDownload.url,
-                undefined,
-                fallbackDownload.auth,
-                accessToken.trim() || DEFAULT_ACCESS_TOKEN
-              ).catch((e) =>
-                setExamStatus(e instanceof Error ? e.message : 'Download failed')
-              )
-            }
+            onClick={() => triggerBackendDownload(fallbackDownload.url)}
           >
             Retry / download .mapr manually
           </button>
