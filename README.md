@@ -1,6 +1,6 @@
 # Mock Exam Platform
 
-Small **React + Vite** app that acts like a minimal LMS: sign in, **Start test**, then talk to **`seb-server`** to register a launch and download the **`.seb`** file for **MA Proctoring**. The real backend is **`seb-server`**; this UI is for integration testing.
+Small **React + Vite** app that acts like a minimal LMS: sign in, **Start test**, then talk to **`seb-server`** to register a launch and download the **`.mapr`** file for **MA Proctoring**. The real backend is **`seb-server`**; this UI is for integration testing.
 
 ## Local setup
 

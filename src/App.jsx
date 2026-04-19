@@ -7,7 +7,7 @@ const DEFAULT_ACCESS_TOKEN =
   import.meta.env.VITE_ORG_ACCESS_TOKEN ||
   import.meta.env.VITE_ORG_SLUG ||
   'none';
-/** Optional — only for manual .seb download when register-launch fails (GET /api/org-config with ORG_CONFIG_REQUIRE_CLIENT_PROOF). */
+/** Optional — only for manual .mapr download when register-launch fails (GET /api/org-config with ORG_CONFIG_REQUIRE_CLIENT_PROOF). */
 const VITE_SEB_CLIENT_NAME = import.meta.env.VITE_SEB_CLIENT_NAME || '';
 const VITE_SEB_CLIENT_SECRET = import.meta.env.VITE_SEB_CLIENT_SECRET || '';
 /** Candidate/session-specific launch URL — same contract as real LMS (deep link, signed URL, etc.) */
@@ -493,7 +493,7 @@ function LmsStartPage() {
       await downloadSebFile(orgConfigFetchUrl, controller.signal, undefined, effectiveAccessToken);
       if (proctorRequired) {
         setExamStatus(
-          'Launch registered and .seb downloaded. Open the file in MA-Proctoring — strict proctoring continues inside MA-Proctoring (mobile / QR when the exam session starts). Candidate will be flagged if mobile proctoring stays offline for 30 seconds.'
+          'Launch registered and .mapr downloaded. Open the file in MA-Proctoring — strict proctoring continues inside MA-Proctoring (mobile / QR when the exam session starts). Candidate will be flagged if mobile proctoring stays offline for 30 seconds.'
         );
       } else {
         setExamStatus('Launch registered on backend service and configuration file downloaded. Open the downloaded file in MA-Proctoring.');
@@ -533,7 +533,7 @@ function LmsStartPage() {
     if (!configRes.ok) {
       const detail = await configRes.text();
       throw new Error(
-        `Launch registered, but failed to download .seb (${configRes.status}). ${
+        `Launch registered, but failed to download .mapr (${configRes.status}). ${
           detail || 'Check backend service logs.'
         }`
       );
@@ -543,8 +543,15 @@ function LmsStartPage() {
     const fileUrl = window.URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = fileUrl;
-    const safeStem = String(fileLabel || 'config').replace(/[/\\?%*:|"<>]/g, '-');
-    anchor.download = `${safeStem}-exam.seb`;
+    const header = configRes.headers.get('content-disposition') || '';
+    const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+    const basicMatch = header.match(/filename="([^"]+)"|filename=([^;]+)/i);
+    const fallbackStem = String(fileLabel || 'config').replace(/[/\\?%*:|"<>]/g, '-');
+    const fallbackTimestamp = new Date().toISOString().replace(/:/g, '').replace(/Z$/, '');
+    const filenameFromHeader = utf8Match?.[1]
+      ? decodeURIComponent(utf8Match[1])
+      : basicMatch?.[1] || basicMatch?.[2] || '';
+    anchor.download = filenameFromHeader || `${fallbackStem}-exam-${fallbackTimestamp}.mapr`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -732,7 +739,7 @@ function LmsStartPage() {
           </div>
           {securityTemplate === 'strict' ? (
             <p className="form-hint" style={{ marginTop: 0 }}>
-              Strict includes mobile (secondary camera) proctoring; follow the steps in MA-Proctoring after opening the .seb.
+              Strict includes mobile (secondary camera) proctoring; follow the steps in MA-Proctoring after opening the .mapr.
             </p>
           ) : null}
           <label className="checkbox-row">
@@ -771,7 +778,7 @@ function LmsStartPage() {
               )
             }
           >
-            Retry / download .seb manually
+            Retry / download .mapr manually
           </button>
         )}
         {fallbackDownload?.message && (
