@@ -336,66 +336,6 @@ body {
   color: var(--danger);
 }
 
-/* ——— Mobile proctor standalone ——— */
-.proctor-page {
-  max-width: 680px;
-  margin: 0 auto;
-}
-
-.proctor-page h1 {
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  margin: 0 0 0.5rem;
-}
-
-.proctor-meta {
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: #f8fafc;
-  font-size: 0.8125rem;
-}
-
-.proctor-banner {
-  margin-bottom: 0.65rem;
-  padding: 0.75rem 1rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.875rem;
-}
-
-.proctor-banner--ok {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #065f46;
-}
-
-.proctor-banner--err {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-}
-
-.proctor-banner--warn {
-  background: var(--warn-bg);
-  border: 1px solid var(--warn-border);
-  color: #92400e;
-}
-
-.proctor-video {
-  width: 100%;
-  border-radius: var(--radius);
-  background: #0f172a;
-  min-height: 220px;
-  margin: 0.75rem 0;
-}
-
-.proctor-chunk {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  margin: 0.5rem 0 1rem;
-}
-
 /* ——— Login status ——— */
 .login-status {
   margin-top: 0.75rem;

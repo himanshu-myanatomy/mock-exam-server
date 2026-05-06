@@ -9,8 +9,7 @@
     "client": "vite",
     "seb-server": "npm start --prefix ../../seb-server",
     "build": "vite build",
-    "preview": "vite preview",
-    "verify:flow": "node scripts/verify-seb-flow.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "react": "^18.2.0",
