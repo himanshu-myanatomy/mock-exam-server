@@ -22,6 +22,14 @@ const DEFAULT_SECURITY_TEMPLATE =
 /** Wire enum for register-launch: `TEST` → exam session, `INTERVIEW` → interview session (seb-server maps to exam|interview). */
 const rawAssessmentKind = String(import.meta.env.VITE_ASSESSMENT_TYPE || 'TEST').trim().toUpperCase();
 const DEFAULT_ASSESSMENT_KIND = rawAssessmentKind === 'INTERVIEW' ? 'INTERVIEW' : 'TEST';
+const DEFAULT_FEATURE_WHITELIST = String(import.meta.env.VITE_FEATURE_WHITELIST || '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+const DEFAULT_APPLICATION_WHITELIST = String(import.meta.env.VITE_APPLICATION_WHITELIST || '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
 
 function decodeJwtPayload(token) {
   try {
@@ -69,6 +77,15 @@ function LmsStartPage() {
   const [securityTemplate, setSecurityTemplate] = useState(DEFAULT_SECURITY_TEMPLATE);
   /** `TEST` | `INTERVIEW` — sent as register-launch `assessmentType` (seb-server normalizes to exam|interview). */
   const [assessmentKind, setAssessmentKind] = useState(DEFAULT_ASSESSMENT_KIND);
+  const [featureWhitelist, setFeatureWhitelist] = useState(DEFAULT_FEATURE_WHITELIST);
+  const [applicationWhitelist, setApplicationWhitelist] = useState(DEFAULT_APPLICATION_WHITELIST);
+  const [allowExternalInputDevices, setAllowExternalInputDevices] = useState(true);
+  const [requireWindowsLocationEnabled, setRequireWindowsLocationEnabled] = useState(false);
+  const [allowNewBrowserTab, setAllowNewBrowserTab] = useState(false);
+  const [restrictNavigationToAllowlist, setRestrictNavigationToAllowlist] = useState(false);
+  const [websiteAllowlist, setWebsiteAllowlist] = useState([]);
+  const [newApp, setNewApp] = useState('');
+  const [newWebsite, setNewWebsite] = useState('');
   const [consentGiven, setConsentGiven] = useState(false);
   /** Separate from examStatus so the button never stays disabled if status text gets stuck */
   const [isStartingSeb, setIsStartingSeb] = useState(false);
@@ -150,6 +167,15 @@ function LmsStartPage() {
       assessmentName: assessmentName.trim(),
       assessmentType: assessmentKind,
       securityTemplate,
+      featureWhitelist,
+      applicationWhitelist,
+      allowExternalInputDevices,
+      requireWindowsLocationEnabled,
+      interviewSebSettings: {
+        allowNewBrowserTab,
+        restrictNavigationToAllowlist,
+        websiteAllowlist,
+      },
     };
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
@@ -233,6 +259,37 @@ function LmsStartPage() {
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
+  }
+
+  function toggleFeature(feature) {
+    setFeatureWhitelist((prev) =>
+      prev.includes(feature) ? prev.filter((item) => item !== feature) : [...prev, feature]
+    );
+  }
+
+  function addApplication() {
+    const executable = newApp.trim();
+    if (!executable) return;
+    setApplicationWhitelist((prev) => (prev.includes(executable) ? prev : [...prev, executable]));
+    setNewApp('');
+  }
+
+  function removeApplication(index) {
+    setApplicationWhitelist((prev) => prev.filter((_, idx) => idx !== index));
+  }
+
+  function addWebsite() {
+    const entry = newWebsite.trim();
+    if (!entry || !restrictNavigationToAllowlist) return;
+    setWebsiteAllowlist((prev) => {
+      if (prev.length >= 40 || prev.includes(entry)) return prev;
+      return [...prev, entry];
+    });
+    setNewWebsite('');
+  }
+
+  function removeWebsite(index) {
+    setWebsiteAllowlist((prev) => prev.filter((_, idx) => idx !== index));
   }
 
   // Exam page view (when /exam?token=...)
@@ -413,6 +470,162 @@ function LmsStartPage() {
               <option value="standard">Standard (desktop MA-Proctoring monitoring)</option>
               <option value="strict">Strict (includes required mobile / secondary camera proctoring)</option>
             </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">SEB features for this launch</label>
+            <p className="form-hint" style={{ marginTop: '0.25rem' }}>
+              LMS-controlled feature flags sent as <code>featureWhitelist</code> in register-launch.
+            </p>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={featureWhitelist.includes('enablePrintScreen')}
+                onChange={() => toggleFeature('enablePrintScreen')}
+              />
+              <span>Print Screen / screenshots</span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={featureWhitelist.includes('allowScreenSharing')}
+                onChange={() => toggleFeature('allowScreenSharing')}
+              />
+              <span>Screen sharing</span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={featureWhitelist.includes('allowMultipleDisplays')}
+                onChange={() => toggleFeature('allowMultipleDisplays')}
+              />
+              <span>Multiple displays (max 2)</span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={featureWhitelist.includes('allowExternalWebcam')}
+                onChange={() => toggleFeature('allowExternalWebcam')}
+              />
+              <span>External webcam</span>
+            </label>
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="lms-app-whitelist">
+              Allowed applications
+            </label>
+            <p className="form-hint" style={{ marginTop: '0.25rem' }}>
+              Windows executable names allowed during this launch (e.g. Slack.exe).
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                id="lms-app-whitelist"
+                className="input"
+                type="text"
+                value={newApp}
+                onChange={(e) => setNewApp(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addApplication();
+                  }
+                }}
+                placeholder="e.g. Slack.exe"
+              />
+              <button type="button" className="btn btn-secondary" onClick={addApplication}>
+                Add
+              </button>
+            </div>
+            {applicationWhitelist.length > 0 ? (
+              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+                {applicationWhitelist.map((app, index) => (
+                  <li key={`${app}-${index}`} style={{ marginBottom: '0.25rem' }}>
+                    <code>{app}</code>{' '}
+                    <button type="button" className="link-download" onClick={() => removeApplication(index)}>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Input devices</label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={allowExternalInputDevices}
+                onChange={(e) => setAllowExternalInputDevices(e.target.checked)}
+              />
+              <span>Allow external keyboard and mouse</span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={requireWindowsLocationEnabled}
+                onChange={(e) => setRequireWindowsLocationEnabled(e.target.checked)}
+              />
+              <span>Require Windows location access before exam start</span>
+            </label>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Interview browsing settings</label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={allowNewBrowserTab}
+                onChange={(e) => setAllowNewBrowserTab(e.target.checked)}
+              />
+              <span>Allow new browser window / tab behavior</span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={restrictNavigationToAllowlist}
+                onChange={(e) => setRestrictNavigationToAllowlist(e.target.checked)}
+              />
+              <span>Restrict navigation to allowlist (interview only)</span>
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                className="input"
+                type="text"
+                value={newWebsite}
+                onChange={(e) => setNewWebsite(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addWebsite();
+                  }
+                }}
+                placeholder="https://meet.google.com/..."
+                disabled={!restrictNavigationToAllowlist}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={addWebsite}
+                disabled={!restrictNavigationToAllowlist}
+              >
+                Add
+              </button>
+            </div>
+            {websiteAllowlist.length > 0 ? (
+              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
+                {websiteAllowlist.map((site, index) => (
+                  <li key={`${site}-${index}`} style={{ marginBottom: '0.25rem' }}>
+                    <code>{site}</code>{' '}
+                    <button
+                      type="button"
+                      className="link-download"
+                      onClick={() => removeWebsite(index)}
+                      disabled={!restrictNavigationToAllowlist}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
           {securityTemplate === 'strict' ? (
             <p className="form-hint" style={{ marginTop: 0 }}>
