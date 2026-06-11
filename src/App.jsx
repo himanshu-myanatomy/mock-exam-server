@@ -255,19 +255,19 @@ function LmsStartPage() {
       const embeddedMapr = registerData?.mapr;
       if (!embeddedMapr?.base64) {
         setExamStatus(
-          'Launch registered but the backend did not return mapr — cannot download the configuration file. Update backend.'
+          'Launch registered but the backend did not return mapr data, so MA-Proctoring cannot be started automatically. Update backend.'
         );
         setIsStartingSeb(false);
         return;
       }
 
-      triggerMaprDownloadFromBase64(embeddedMapr);
+      requestMaprAutoLaunch(embeddedMapr?.base64);
       if (proctorRequired) {
         setExamStatus(
-          'Launch registered and .mapr downloaded. Open the file in MA-Proctoring — strict proctoring continues inside MA-Proctoring (mobile / QR when the exam session starts). Candidate will be flagged if mobile proctoring stays offline for 30 seconds.'
+          'Launch registered and MA-Proctoring launch requested automatically from API mapr data. Strict proctoring continues inside MA-Proctoring (mobile / QR when the exam session starts). Candidate will be flagged if mobile proctoring stays offline for 30 seconds.'
         );
       } else {
-        setExamStatus('Launch registered on backend service and configuration file downloaded. Open the downloaded file in MA-Proctoring.');
+        setExamStatus('Launch registered on backend service and MA-Proctoring launch requested automatically from API mapr data.');
       }
     } catch (e) {
       const aborted = e?.name === 'AbortError';
@@ -282,26 +282,21 @@ function LmsStartPage() {
     }
   }
 
-  function triggerMaprDownloadFromBase64(mapr) {
-    const base64 = String(mapr?.base64 || '').trim();
+  function requestMaprAutoLaunch(base64) {
+    const mime = 'application/mapr';
     if (!base64) return;
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    const blob = new Blob([bytes], {
-      type: mapr.contentType || 'application/octet-stream',
-    });
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = mapr.filename || 'config.mapr';
-    anchor.rel = 'noopener';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(objectUrl);
+
+    // MA Proctoring registers seb:// and sebs:// handlers on Windows.
+    // Triggering one of those URLs lets us start the app without requiring
+    // users to manually open the downloaded .mapr file.
+    const launchUrl = `sebs://${mime};base64,${base64}`;
+    const launchAnchor = document.createElement('a');
+    launchAnchor.href = launchUrl;
+    launchAnchor.rel = 'noopener';
+    launchAnchor.style.display = 'none';
+    document.body.appendChild(launchAnchor);
+    launchAnchor.click();
+    launchAnchor.remove();
   }
 
   function toggleFeature(feature) {
