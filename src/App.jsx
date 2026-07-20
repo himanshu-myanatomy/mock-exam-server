@@ -99,6 +99,7 @@ function LmsStartPage() {
   const [featureWhitelistEntry, setFeatureWhitelistEntry] = useState(DEFAULT_FEATURE_WHITELIST_ENTRY);
   const [applicationWhitelist, setApplicationWhitelist] = useState(DEFAULT_APPLICATION_WHITELIST);
   const [allowExternalInputDevices, setAllowExternalInputDevices] = useState(true);
+  const [allowUpload, setAllowUpload] = useState(false);
   const [requireWindowsLocationEnabled, setRequireWindowsLocationEnabled] = useState(false);
   const [allowNewBrowserTab, setAllowNewBrowserTab] = useState(false);
   const [restrictNavigationToAllowlist, setRestrictNavigationToAllowlist] = useState(false);
@@ -219,6 +220,7 @@ function LmsStartPage() {
         featureWhitelist: featureWhitelistEntry,
         applicationWhitelist,
         allowExternalInputDevices,
+        allowUpload,
         requireWindowsLocationEnabled,
       };
       if (assessmentKind === ASSESSMENT_KIND.INTERVIEW) {
@@ -286,10 +288,10 @@ function LmsStartPage() {
     const mime = 'application/mapr';
     if (!base64) return;
 
-    // MA Proctoring registers seb:// and sebs:// handlers on Windows.
+    // MA Proctoring registers mapit:// and mapits:// handlers on Windows.
     // Triggering one of those URLs lets us start the app without requiring
     // users to manually open the downloaded .mapr file.
-    const launchUrl = `sebs://${mime};base64,${base64}`;
+    const launchUrl = `mapits://${mime};base64,${base64}`;
     const launchAnchor = document.createElement('a');
     launchAnchor.href = launchUrl;
     launchAnchor.rel = 'noopener';
@@ -624,6 +626,14 @@ function LmsStartPage() {
                 onChange={(e) => setRequireWindowsLocationEnabled(e.target.checked)}
               />
               <span>Require Windows location access before exam start</span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={allowUpload}
+                onChange={(e) => setAllowUpload(e.target.checked)}
+              />
+              <span>Allow file uploads from the candidate's computer inside SEB</span>
             </label>
           </div>
           <div className="form-group">
