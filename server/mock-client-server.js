@@ -1,5 +1,7 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import express from 'express';
+import { encryptMapr } from './mapr-pkhs.js';
 
 const app = express();
 
@@ -28,6 +30,32 @@ app.get('/health', (_req, res) => {
     service: 'mock-client-server',
     signatureValidation: SIGNING_SECRET ? 'enabled' : 'disabled',
   });
+});
+
+/**
+ * Stands in for what the real backend would do: take the plaintext .mapr the launch API returns
+ * and re-wrap it as a public-key encrypted file the candidate can double-click. Set
+ * MOCK_MAPR_CERT_PEM to a certificate whose private key is installed in the Windows cert store.
+ */
+app.post('/mapr/encrypt', (req, res) => {
+  const certPath = safeString(process.env.MOCK_MAPR_CERT_PEM);
+  if (!certPath) {
+    return res.status(503).json({ ok: false, error: 'MOCK_MAPR_CERT_PEM is not set' });
+  }
+
+  const base64 = safeString(req.body?.base64);
+  if (!base64) {
+    return res.status(400).json({ ok: false, error: 'base64 is required' });
+  }
+
+  try {
+    const encrypted = encryptMapr(Buffer.from(base64, 'base64'), fs.readFileSync(certPath, 'utf8'));
+    console.log('[mock-client] mapr encrypted %d -> %d bytes', base64.length, encrypted.length);
+    return res.json({ ok: true, base64: encrypted.toString('base64') });
+  } catch (e) {
+    console.error('[mock-client] mapr encryption failed:', e.message);
+    return res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 app.post('/webhook/completion-report', (req, res) => {

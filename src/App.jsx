@@ -88,6 +88,8 @@ function LmsStartPage() {
   const [status, setStatus] = useState('');
   const [examStatus, setExamStatus] = useState('');
   const [candidateEmail, setCandidateEmail] = useState('');
+  /** Launch payload from the last register call, kept so the file fallback can reuse it. */
+  const [lastMapr, setLastMapr] = useState(null);
   const [apiKey, setApiKey] = useState(DEFAULT_API_KEY);
   const [launchUrl, setLaunchUrl] = useState(DEFAULT_LAUNCH_URL);
   const [clientAssessmentId, setClientAssessmentId] = useState(DEFAULT_CLIENT_ASSESSMENT_ID);
@@ -263,6 +265,7 @@ function LmsStartPage() {
         return;
       }
 
+      setLastMapr(embeddedMapr);
       requestMaprAutoLaunch(embeddedMapr?.base64);
       if (proctorRequired) {
         setExamStatus(
@@ -299,6 +302,25 @@ function LmsStartPage() {
     document.body.appendChild(launchAnchor);
     launchAnchor.click();
     launchAnchor.remove();
+  }
+
+  /**
+   * Fallback for the ~5% where the mapits:// hand-off never happens — most likely because the
+   * base64 payload overruns what a Windows protocol handler command line can carry. A file has
+   * no such limit, and the .mapr association opens MA-Proctoring.
+   */
+  function downloadMapr() {
+    const base64 = lastMapr?.base64;
+    if (!base64) return;
+
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/mapr' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = lastMapr?.filename || 'exam.mapr';
+    a.click();
+    URL.revokeObjectURL(url);
+    setExamStatus(`Saved ${a.download} (${bytes.length} bytes). Open it to launch MA-Proctoring.`);
   }
 
   function toggleFeature(feature) {
@@ -715,6 +737,15 @@ function LmsStartPage() {
             {isStartingSeb ? 'Starting…' : 'Start test'}
           </button>
         </form>
+        {lastMapr ? (
+          <p className="form-hint">
+            App did not open?{' '}
+            <button type="button" className="link-download" onClick={downloadMapr}>
+              Download .mapr
+            </button>{' '}
+            and open the file.
+          </p>
+        ) : null}
         <div
           role="status"
           aria-live="polite"
