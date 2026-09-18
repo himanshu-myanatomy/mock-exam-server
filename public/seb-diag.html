@@ -1,0 +1,105 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEB environment diagnostic</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; padding:20px; background:#0f1014; color:#e7e7ea;
+         font:14px/1.5 -apple-system,Segoe UI,system-ui,sans-serif; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  p.lead { margin:0 0 18px; color:#9a9aa5; }
+  table { border-collapse:collapse; width:100%; max-width:920px; margin-bottom:22px; }
+  caption { text-align:left; font-weight:600; padding:10px 0 6px; color:#c9a7ff; }
+  td { border-bottom:1px solid #26262e; padding:6px 10px; vertical-align:top; }
+  td:first-child { color:#9a9aa5; width:280px; }
+  .y { color:#4ade80; } .n { color:#f87171; font-weight:600; }
+  code { word-break:break-all; }
+  button { background:#7c3aed; color:#fff; border:0; border-radius:8px;
+           padding:10px 16px; font-size:14px; cursor:pointer; }
+</style>
+<h1>SEB environment diagnostic</h1>
+<p class="lead">Open this page inside SEB and inside Chrome, then compare. Anything marked red differs from a normal desktop browser and can hide a whole section of a page.</p>
+<div id="out"></div>
+<button onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('out').innerText)">Copy results</button>
+
+<script>
+// Tailwind's default breakpoints. A hero that is `hidden lg:block` disappears entirely
+// when the CSS viewport is under 1024px, which is the single most common reason a whole
+// section renders in one browser and not another at the same physical window size.
+const BREAKPOINTS = { 'sm 640': 640, 'md 768': 768, 'lg 1024': 1024, 'xl 1280': 1280, '2xl 1536': 1536 };
+
+function table(title, rows) {
+  const body = rows.map(([k, v]) => {
+    const bad = v === false || v === 'no';
+    const val = v === true ? '<span class="y">yes</span>'
+              : v === false ? '<span class="n">NO</span>'
+              : `<code${bad ? ' class="n"' : ''}>${String(v)}</code>`;
+    return `<tr><td>${k}</td><td>${val}</td></tr>`;
+  }).join('');
+  return `<table><caption>${title}</caption>${body}</table>`;
+}
+
+function has(fn) { try { return !!fn(); } catch (e) { return false; } }
+
+const viewport = [
+  ['window.innerWidth (CSS px)', window.innerWidth],
+  ['window.innerHeight', window.innerHeight],
+  ['devicePixelRatio', window.devicePixelRatio],
+  ['screen.width x height', screen.width + ' x ' + screen.height],
+  ['document.documentElement.clientWidth', document.documentElement.clientWidth],
+  ['zoom (outerWidth/innerWidth)', (window.outerWidth / window.innerWidth).toFixed(3)],
+];
+for (const [label, px] of Object.entries(BREAKPOINTS)) {
+  viewport.push(['matches min-width ' + label + 'px', window.matchMedia(`(min-width:${px}px)`).matches]);
+}
+
+const env = [
+  ['userAgent', navigator.userAgent],
+  ['platform', navigator.platform],
+  ['languages', (navigator.languages || []).join(', ')],
+  ['cookieEnabled', navigator.cookieEnabled],
+  ['prefers-reduced-motion: reduce', window.matchMedia('(prefers-reduced-motion: reduce)').matches],
+  ['prefers-color-scheme: dark', window.matchMedia('(prefers-color-scheme: dark)').matches],
+  ['hover: none (treated as touch)', window.matchMedia('(hover: none)').matches],
+  ['pointer: coarse', window.matchMedia('(pointer: coarse)').matches],
+  ['maxTouchPoints', navigator.maxTouchPoints],
+];
+
+const apis = [
+  ['IntersectionObserver', 'IntersectionObserver' in window],
+  ['ResizeObserver', 'ResizeObserver' in window],
+  ['MutationObserver', 'MutationObserver' in window],
+  ['requestAnimationFrame', 'requestAnimationFrame' in window],
+  ['Web Animations (element.animate)', 'animate' in document.createElement('div')],
+  ['localStorage readable/writable', has(() => { localStorage.setItem('_d', '1'); localStorage.removeItem('_d'); return true; })],
+  ['sessionStorage', has(() => { sessionStorage.setItem('_d', '1'); sessionStorage.removeItem('_d'); return true; })],
+  ['indexedDB', 'indexedDB' in window],
+  ['WebGL context', has(() => document.createElement('canvas').getContext('webgl'))],
+  ['WebGL2 context', has(() => document.createElement('canvas').getContext('webgl2'))],
+  ['fetch', 'fetch' in window],
+  ['WebSocket', 'WebSocket' in window],
+];
+
+const css = [
+  ['background-clip: text', CSS.supports('background-clip', 'text') || CSS.supports('-webkit-background-clip', 'text')],
+  ['backdrop-filter: blur(4px)', CSS.supports('backdrop-filter', 'blur(4px)') || CSS.supports('-webkit-backdrop-filter', 'blur(4px)')],
+  ['selector(:has())', has(() => CSS.supports('selector(:has(*))'))],
+  ['aspect-ratio', CSS.supports('aspect-ratio', '1 / 1')],
+  ['gap in flex', CSS.supports('gap', '1rem')],
+  ['color-mix()', CSS.supports('color', 'color-mix(in srgb, red, blue)')],
+  ['oklch() colors', CSS.supports('color', 'oklch(0.5 0.1 200)')],
+  ['CSS nesting', CSS.supports('selector(&)')],
+];
+
+document.getElementById('out').innerHTML =
+  table('Viewport and breakpoints — a failing lg/xl row hides desktop-only sections', viewport) +
+  table('Environment', env) +
+  table('JavaScript APIs', apis) +
+  table('CSS feature support', css);
+
+// Uncaught page errors are the other way a single section vanishes while the rest renders.
+window.addEventListener('error', (e) => {
+  document.getElementById('out').insertAdjacentHTML('afterbegin',
+    `<table><caption>Uncaught error</caption><tr><td>message</td><td><code class="n">${e.message}</code></td></tr></table>`);
+});
+</script>

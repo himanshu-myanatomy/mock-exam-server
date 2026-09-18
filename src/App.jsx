@@ -101,6 +101,12 @@ function LmsStartPage() {
   const [allowExternalInputDevices, setAllowExternalInputDevices] = useState(true);
   const [allowUpload, setAllowUpload] = useState(false);
   const [requireWindowsLocationEnabled, setRequireWindowsLocationEnabled] = useState(false);
+  // MA desktop capture (SEB-native webcam / screen recording). Sent per launch so a test run can
+  // switch it on without editing the organisation's configuration; leaving all three off sends
+  // nothing meaningful and the org's own flags decide.
+  const [useMAProctoringCamera, setUseMAProctoringCamera] = useState(false);
+  const [isCameraIsOptional, setIsCameraIsOptional] = useState(false);
+  const [useMAProctoringScreenRecording, setUseMAProctoringScreenRecording] = useState(false);
   const [allowNewBrowserTab, setAllowNewBrowserTab] = useState(false);
   const [restrictNavigationToAllowlist, setRestrictNavigationToAllowlist] = useState(false);
   const [websiteAllowlist, setWebsiteAllowlist] = useState([]);
@@ -222,6 +228,11 @@ function LmsStartPage() {
         allowExternalInputDevices,
         allowUpload,
         requireWindowsLocationEnabled,
+        useMAProctoringCamera,
+        // The server forces this back to false when the camera is off, so sending the raw
+        // checkbox is safe and mirrors what an LMS would send.
+        isCameraIsOptional,
+        useMAProctoringScreenRecording,
       };
       if (assessmentKind === ASSESSMENT_KIND.INTERVIEW) {
         payload.interviewSebSettings = {
@@ -635,6 +646,41 @@ function LmsStartPage() {
               />
               <span>Allow file uploads from the candidate's computer inside SEB</span>
             </label>
+          </div>
+          <div className="form-group">
+            <label className="form-label">MA proctoring capture</label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={useMAProctoringCamera}
+                onChange={(e) => setUseMAProctoringCamera(e.target.checked)}
+              />
+              <span>Record the candidate's webcam inside SEB (with microphone audio)</span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={isCameraIsOptional}
+                disabled={!useMAProctoringCamera}
+                onChange={(e) => setIsCameraIsOptional(e.target.checked)}
+              />
+              <span>
+                Camera is optional (only applies when webcam recording is on; the exam continues
+                without a camera instead of being blocked)
+              </span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={useMAProctoringScreenRecording}
+                onChange={(e) => setUseMAProctoringScreenRecording(e.target.checked)}
+              />
+              <span>Record the candidate's screen inside SEB</span>
+            </label>
+            <p className="form-hint">
+              Recorded as 10 second MP4 chunks and uploaded to the proctoring backend. Requires a
+              desktop client that supports MA capture; older clients ignore these keys.
+            </p>
           </div>
           <div className="form-group">
             <label className="form-label">Interview browsing settings</label>
