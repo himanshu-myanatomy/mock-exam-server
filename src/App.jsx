@@ -770,8 +770,176 @@ function LmsStartPage() {
         </div>
       </div>
 
+      <RecordingReviewPanel
+        sebBaseUrl={SEB_SERVER_URL.replace(/\/$/, '')}
+        apiKey={apiKey}
+        candidateEmail={candidateEmail}
+        clientAssessmentId={clientAssessmentId}
+        attemptNumber={attemptNumber}
+      />
+
       {token && <div className="session-pill">Signed in as session user</div>}
     </AppShell>
+  );
+}
+
+/**
+ * The client side of recording review: calls 2 and 3 of the integration contract, exactly as a
+ * real LMS admin screen would. Call 2 says which streams exist, call 3 mints one single-use link
+ * per stream.
+ *
+ * The links are opened with window.open, never rendered into an iframe — playback access rides on
+ * a cookie that browsers strip from third-party frames, so an embedded player shows black.
+ */
+function RecordingReviewPanel({ sebBaseUrl, apiKey, candidateEmail, clientAssessmentId, attemptNumber }) {
+  const [recordings, setRecordings] = useState(null);
+  const [reviewStatus, setReviewStatus] = useState('');
+  const [busyStream, setBusyStream] = useState('');
+  const [isChecking, setIsChecking] = useState(false);
+  const [lastLinks, setLastLinks] = useState({});
+
+  const identity = {
+    candidateEmail: String(candidateEmail || '').trim().toLowerCase(),
+    clientAssessmentId: String(clientAssessmentId || '').trim(),
+    attemptNumber: Number(attemptNumber),
+  };
+  const identityReady =
+    Boolean(identity.candidateEmail && identity.clientAssessmentId && identity.attemptNumber >= 1 && apiKey?.trim());
+
+  async function readJson(response) {
+    const text = await response.text();
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      return { error: text || 'Unreadable response' };
+    }
+  }
+
+  async function checkRecordings() {
+    if (!identityReady) {
+      setReviewStatus('Fill in api key, candidate email, assessment id and attempt number first.');
+      return;
+    }
+    setIsChecking(true);
+    setRecordings(null);
+    setLastLinks({});
+    setReviewStatus('Checking what was recorded...');
+    try {
+      const query = new URLSearchParams({
+        candidateEmail: identity.candidateEmail,
+        clientAssessmentId: identity.clientAssessmentId,
+        attemptNumber: String(identity.attemptNumber),
+      });
+      const response = await fetch(`${sebBaseUrl}/api/v1/org/proctor/recordings?${query}`, {
+        headers: { 'x-org-api-key': apiKey.trim() },
+      });
+      const data = await readJson(response);
+      if (!response.ok) {
+        setReviewStatus(data.error || `Lookup failed (${response.status}).`);
+        return;
+      }
+      setRecordings(data);
+      const available = ['screen', 'webcam'].filter((name) => data?.recordings?.[name]?.available);
+      setReviewStatus(
+        available.length
+          ? `Found: ${available.join(' and ')}. Playback mode: ${data.playbackMode || 'proxied'}.`
+          : 'Nothing was recorded for this attempt. Check the recording flags in the register response.'
+      );
+    } catch (error) {
+      setReviewStatus(`Could not reach the backend: ${error.message}`);
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
+  async function openWatchLink(stream) {
+    setBusyStream(stream);
+    setReviewStatus(`Requesting a ${stream} link...`);
+    try {
+      const response = await fetch(`${sebBaseUrl}/api/v1/org/proctor/recordings/watch-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-org-api-key': apiKey.trim() },
+        body: JSON.stringify({ ...identity, stream, ttlMinutes: 120 }),
+      });
+      const data = await readJson(response);
+      if (!response.ok) {
+        setReviewStatus(data.error || `Could not mint a ${stream} link (${response.status}).`);
+        return;
+      }
+      setLastLinks((previous) => ({ ...previous, [stream]: data }));
+      // A new tab, never an iframe: the playback cookie would be stripped as third-party.
+      window.open(data.url, '_blank', 'noopener');
+      setReviewStatus(`Opened the ${stream} recording. Link expires ${new Date(data.expiresAt).toLocaleTimeString()}.`);
+    } catch (error) {
+      setReviewStatus(`Could not reach the backend: ${error.message}`);
+    } finally {
+      setBusyStream('');
+    }
+  }
+
+  function renderStream(name, label) {
+    const info = recordings?.recordings?.[name];
+    if (!info) return null;
+    if (!info.available) {
+      return (
+        <li key={name} style={{ marginBottom: '0.5rem', color: '#6b7280' }}>
+          <strong>{label}:</strong> not recorded
+        </li>
+      );
+    }
+    // A short QA recording is often under a minute, and "~0 min" reads like a failure.
+    const seconds = info.durationSec || 0;
+    const length = seconds < 90 ? `${seconds}s` : `~${Math.round(seconds / 60)} min`;
+    const link = lastLinks[name];
+    return (
+      <li key={name} style={{ marginBottom: '0.5rem' }}>
+        <strong>{label}:</strong> {info.segments} segments, {length}
+        {info.sessions > 1 ? ` (${info.sessions - 1} relaunch)` : ''}{' '}
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => openWatchLink(name)}
+          disabled={busyStream === name}
+        >
+          {busyStream === name ? 'Opening...' : `Watch ${label.toLowerCase()}`}
+        </button>
+        {link ? (
+          <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+            <a href={link.url} target="_blank" rel="noopener noreferrer">
+              reopen link
+            </a>{' '}
+            <span style={{ color: '#6b7280' }}>(single use - already spent once)</span>
+          </div>
+        ) : null}
+      </li>
+    );
+  }
+
+  return (
+    <div className="card">
+      <h2 className="card-title">Review recordings</h2>
+      <p className="card-lead">
+        What a client admin screen does after the exam: ask which streams exist, then open one
+        single-use link per stream. Screen and webcam are separate recordings.
+      </p>
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={checkRecordings}
+        disabled={isChecking || !identityReady}
+      >
+        {isChecking ? 'Checking...' : 'Check recordings for this attempt'}
+      </button>
+      {recordings ? (
+        <ul style={{ margin: '1rem 0 0', paddingLeft: '1.25rem' }}>
+          {renderStream('screen', 'Screen')}
+          {renderStream('webcam', 'Webcam')}
+        </ul>
+      ) : null}
+      <div role="status" aria-live="polite" className="status-area">
+        {reviewStatus}
+      </div>
+    </div>
   );
 }
 
