@@ -101,11 +101,10 @@ function LmsStartPage() {
   const [allowExternalInputDevices, setAllowExternalInputDevices] = useState(true);
   const [allowUpload, setAllowUpload] = useState(false);
   const [requireWindowsLocationEnabled, setRequireWindowsLocationEnabled] = useState(false);
-  // MA desktop capture (SEB-native webcam / screen recording). Sent per launch so a test run can
-  // switch it on without editing the organisation's configuration; leaving all three off sends
-  // nothing meaningful and the org's own flags decide.
+  // MA desktop capture (SEB-native webcam / screen recording). Each stream records only when the
+  // organisation is entitled to it AND this launch explicitly asks for it, so an unticked box
+  // means no recording whatever the org has configured.
   const [useMAProctoringCamera, setUseMAProctoringCamera] = useState(false);
-  const [isCameraIsOptional, setIsCameraIsOptional] = useState(false);
   const [useMAProctoringScreenRecording, setUseMAProctoringScreenRecording] = useState(false);
   const [allowNewBrowserTab, setAllowNewBrowserTab] = useState(false);
   const [restrictNavigationToAllowlist, setRestrictNavigationToAllowlist] = useState(false);
@@ -229,9 +228,6 @@ function LmsStartPage() {
         allowUpload,
         requireWindowsLocationEnabled,
         useMAProctoringCamera,
-        // The server forces this back to false when the camera is off, so sending the raw
-        // checkbox is safe and mirrors what an LMS would send.
-        isCameraIsOptional,
         useMAProctoringScreenRecording,
       };
       if (assessmentKind === ASSESSMENT_KIND.INTERVIEW) {
@@ -656,18 +652,6 @@ function LmsStartPage() {
                 onChange={(e) => setUseMAProctoringCamera(e.target.checked)}
               />
               <span>Record the candidate's webcam inside SEB (with microphone audio)</span>
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={isCameraIsOptional}
-                disabled={!useMAProctoringCamera}
-                onChange={(e) => setIsCameraIsOptional(e.target.checked)}
-              />
-              <span>
-                Camera is optional (only applies when webcam recording is on; the exam continues
-                without a camera instead of being blocked)
-              </span>
             </label>
             <label className="checkbox-row">
               <input
